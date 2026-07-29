@@ -1,0 +1,6 @@
+{
+  "name": "Action Backend API",
+  "description": "Professional Express backend with Supabase, M-Pesa (PayHero), SMS, and SMTP integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

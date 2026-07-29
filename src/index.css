@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dashboard-bg: #0f172a;
+  --color-panel-bg: #1e293b;
+  --color-sleek-border: #334155;
+  --color-sleek-text: #f8fafc;
+  --color-sleek-muted: #94a3b8;
+  --color-sleek-dim: #64748b;
+  --color-sleek-accent: #818cf8;
+  --color-sleek-success: #10b981;
+  --color-sleek-pending: #f59e0b;
+
+  --font-sans: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+@layer base {
+  body {
+    @apply bg-dashboard-bg text-sleek-text;
+  }
+}
+
+@keyframes pulse-anim {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+.animate-sleek-pulse {
+  animation: pulse-anim 2s infinite;
+}

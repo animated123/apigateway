@@ -1,0 +1,10 @@
+{
+  "host": "127.0.0.1",
+  "port": 5432,
+  "database": "Errandly",
+  "user": "postgres",
+  "password": "fetch",
+  "max": 10,
+  "idleTimeoutMillis": 30000,
+  "connectionTimeoutMillis": 5000
+}
