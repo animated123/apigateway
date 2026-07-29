@@ -2,14 +2,15 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { PaymentController } from './src/controllers/paymentController';
-import { SMSController } from './src/controllers/smsController';
-import { StatsController } from './src/controllers/statsController';
-import { DBController } from './src/controllers/dbController';
-import { AuthController } from './src/controllers/authController';
-import { EnvController } from './src/controllers/envController';
-import { authenticateToken } from './src/middleware/auth';
-import { query } from './src/lib/postgres';
+import { createServer as createViteServer } from 'vite';
+import { PaymentController } from './src/controllers/paymentController.ts';
+import { SMSController } from './src/controllers/smsController.ts';
+import { StatsController } from './src/controllers/statsController.ts';
+import { DBController } from './src/controllers/dbController.ts';
+import { AuthController } from './src/controllers/authController.ts';
+import { EnvController } from './src/controllers/envController.ts';
+import { authenticateToken } from './src/middleware/auth.ts';
+import { query } from './src/lib/postgres.ts';
 
 // --- Circular Logs Buffer & Console Interceptor ---
 interface LogEntry {
@@ -70,7 +71,7 @@ console.error = (...args: any[]) => {
 };
 // --------------------------------------------------
 
-export function createExpressApp() {
+async function startServer() {
   const app = express();
 
   // Logging Middleware for Cloud Run
@@ -207,42 +208,32 @@ export function createExpressApp() {
   });
 
   app.use('/api', apiRouter);
-  app.use('/', apiRouter);
 
-  return app;
-}
-
-export const app = createExpressApp();
-
-// In standalone / container environments (Cloud Run / Local Dev), start the listener
-if (!process.env.VERCEL) {
-  async function startServer() {
-    if (process.env.NODE_ENV !== 'production') {
-      const { createServer: createViteServer } = await import('vite');
-      const vite = await createViteServer({
-        server: { middlewareMode: true },
-        appType: 'spa',
-      });
-      app.use(vite.middlewares);
-    } else {
-      // Production: serve static files from dist
-      const distPath = path.join(process.cwd(), 'dist');
-      app.use(express.static(distPath));
-      app.get('*', (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
-      });
-    }
-
-    // Required port matching AI Studio environment constraints
-    const port = 3000;
-    app.listen(port, "0.0.0.0", () => {
-      console.log(`[SYSTEM] Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`[SYSTEM] Professional Backend running at http://0.0.0.0:${port}`);
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    // Production: serve static files from dist
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  startServer().catch(err => {
-    console.error('[FATAL] Failed to start server:', err);
-    process.exit(1);
+  // Required port matching AI Studio environment constraints
+  const port = 3000;
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`[SYSTEM] Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`[SYSTEM] Professional Backend running at http://0.0.0.0:${port}`);
   });
 }
+
+startServer().catch(err => {
+  console.error('[FATAL] Failed to start server:', err);
+  process.exit(1);
+});

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { query } from '../lib/postgres';
+import { query } from '../lib/postgres.ts';
 
 function sanitizeErrorMessage(message: string | null | undefined): string {
   if (!message) return 'An unknown database error occurred.';

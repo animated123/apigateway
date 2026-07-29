@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { query } from '../lib/postgres';
-import { EmailService } from '../services/email';
-import { SMSService } from '../services/sms';
+import { query } from '../lib/postgres.ts';
+import { EmailService } from '../services/email.ts';
+import { SMSService } from '../services/sms.ts';
 
 /**
  * Controller containing secure sign up, sign in, and identity retrieval flows.
