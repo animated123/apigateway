@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { query } from '../lib/postgres.ts';
-import { payHero } from '../services/payhero.ts';
-import { paystack } from '../services/paystack.ts';
+import { query } from '../lib/postgres';
+import { payHero } from '../services/payhero';
+import { paystack } from '../services/paystack';
 
 /**
  * Payment Controller - PostgreSQL Implementation (v4)

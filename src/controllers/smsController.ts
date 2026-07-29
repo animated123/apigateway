@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { query } from '../lib/postgres.ts';
-import { EmailService } from '../services/email.ts';
-import { SMSService } from '../services/sms.ts';
+import { query } from '../lib/postgres';
+import { EmailService } from '../services/email';
+import { SMSService } from '../services/sms';
 
 export class SMSController {
   static async sendOTP(req: Request, res: Response) {

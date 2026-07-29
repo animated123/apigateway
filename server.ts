@@ -2,15 +2,14 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
-import { PaymentController } from './src/controllers/paymentController.ts';
-import { SMSController } from './src/controllers/smsController.ts';
-import { StatsController } from './src/controllers/statsController.ts';
-import { DBController } from './src/controllers/dbController.ts';
-import { AuthController } from './src/controllers/authController.ts';
-import { EnvController } from './src/controllers/envController.ts';
-import { authenticateToken } from './src/middleware/auth.ts';
-import { query } from './src/lib/postgres.ts';
+import { PaymentController } from './src/controllers/paymentController';
+import { SMSController } from './src/controllers/smsController';
+import { StatsController } from './src/controllers/statsController';
+import { DBController } from './src/controllers/dbController';
+import { AuthController } from './src/controllers/authController';
+import { EnvController } from './src/controllers/envController';
+import { authenticateToken } from './src/middleware/auth';
+import { query } from './src/lib/postgres';
 
 // --- Circular Logs Buffer & Console Interceptor ---
 interface LogEntry {
@@ -208,6 +207,7 @@ export function createExpressApp() {
   });
 
   app.use('/api', apiRouter);
+  app.use('/', apiRouter);
 
   return app;
 }

@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { query, getCurrentConfig, recreatePoolAndSave } from '../lib/postgres.ts';
+import { query, getCurrentConfig, recreatePoolAndSave } from '../lib/postgres';
 
 /**
  * Sanitizes system or network errors
