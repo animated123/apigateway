@@ -1,7 +1,8 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { Activity, Database, Smartphone, Mail, CheckCircle2, CheckCircle, Clock, Zap, Server, ShieldCheck, ExternalLink, Menu, History, LayoutDashboard, Search, Filter, Terminal, Trash2, CreditCard, LogOut } from 'lucide-react';
+import { Activity, Database, Smartphone, Mail, CheckCircle2, CheckCircle, Clock, Zap, Server, ShieldCheck, ExternalLink, Menu, History, LayoutDashboard, Search, Filter, Terminal, Trash2, CreditCard, LogOut, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, hasSupabaseConfig } from './lib/supabase.ts';
+import { EnvManager } from './components/EnvManager.tsx';
 
 const getApiBaseUrl = (): string => {
   if (typeof window === 'undefined') return '';
@@ -299,6 +300,12 @@ export default function App() {
 
           <div className="flex flex-col gap-2">
             <h3 className="text-[11px] uppercase tracking-widest text-sleek-dim mb-2">Resources</h3>
+            <NavItem 
+              icon={<Key size={18} />} 
+              label="Env Variables" 
+              active={activeTab === 'env'} 
+              onClick={() => setActiveTab('env')} 
+            />
             <NavItem icon={<ShieldCheck size={18} />} label="API Docs" />
             <NavItem icon={<Activity size={18} />} label="Logs" />
           </div>
@@ -365,6 +372,12 @@ export default function App() {
                     label="API Tester" 
                     active={activeTab === 'tester'} 
                     onClick={() => { setActiveTab('tester'); setIsMobileMenuOpen(false); }} 
+                  />
+                  <NavItem 
+                    icon={<Key size={18} />} 
+                    label="Env Variables" 
+                    active={activeTab === 'env'} 
+                    onClick={() => { setActiveTab('env'); setIsMobileMenuOpen(false); }} 
                   />
                 </div>
                 {/* ... other menu items can be added here if needed */}
@@ -458,6 +471,8 @@ export default function App() {
             <TransactionHistoryPage onSelect={setSelectedTx} />
           ) : activeTab === 'payments' ? (
             <PaymentManagementPage onSelect={setSelectedTx} />
+          ) : activeTab === 'env' ? (
+            <EnvManager apiBaseUrl={API_BASE_URL} />
           ) : (
             <APITesterPage />
           )}

@@ -8,6 +8,7 @@ import { SMSController } from './src/controllers/smsController.ts';
 import { StatsController } from './src/controllers/statsController.ts';
 import { DBController } from './src/controllers/dbController.ts';
 import { AuthController } from './src/controllers/authController.ts';
+import { EnvController } from './src/controllers/envController.ts';
 import { authenticateToken } from './src/middleware/auth.ts';
 import { query } from './src/lib/postgres.ts';
 
@@ -70,7 +71,7 @@ console.error = (...args: any[]) => {
 };
 // --------------------------------------------------
 
-async function startServer() {
+export function createExpressApp() {
   const app = express();
 
   // Logging Middleware for Cloud Run
@@ -194,6 +195,13 @@ async function startServer() {
     res.status(200).json({ success: true, message: 'Logs cleared successfully' });
   });
 
+  // Protected Environment Variables Management Routes
+  apiRouter.post('/admin/env/verify', EnvController.verifyPassword);
+  apiRouter.post('/admin/env/change-password', EnvController.changePassword);
+  apiRouter.post('/admin/env/get', EnvController.getEnvVars);
+  apiRouter.post('/admin/env/update', EnvController.updateEnvVar);
+  apiRouter.post('/admin/env/delete', EnvController.deleteEnvVar);
+
   // Catch-all for undefined API routes
   apiRouter.all('*', (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
@@ -201,31 +209,40 @@ async function startServer() {
 
   app.use('/api', apiRouter);
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
-    // Production: serve static files from dist
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+  return app;
+}
+
+export const app = createExpressApp();
+
+// In standalone / container environments (Cloud Run / Local Dev), start the listener
+if (!process.env.VERCEL) {
+  async function startServer() {
+    if (process.env.NODE_ENV !== 'production') {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } else {
+      // Production: serve static files from dist
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
+
+    // Required port matching AI Studio environment constraints
+    const port = 3000;
+    app.listen(port, "0.0.0.0", () => {
+      console.log(`[SYSTEM] Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`[SYSTEM] Professional Backend running at http://0.0.0.0:${port}`);
     });
   }
 
-  // Required port matching AI Studio environment constraints
-  const port = 3000;
-  app.listen(port, "0.0.0.0", () => {
-    console.log(`[SYSTEM] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[SYSTEM] Professional Backend running at http://0.0.0.0:${port}`);
+  startServer().catch(err => {
+    console.error('[FATAL] Failed to start server:', err);
+    process.exit(1);
   });
 }
-
-startServer().catch(err => {
-  console.error('[FATAL] Failed to start server:', err);
-  process.exit(1);
-});
