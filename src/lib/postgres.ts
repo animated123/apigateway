@@ -2,10 +2,41 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import dns from 'dns';
+
+// Ensure Node.js defaults to IPv4 first for DNS resolution.
+// This prevents ENETUNREACH errors on cloud platforms (like Render, Heroku, Cloud Run) that do not support outbound IPv6.
+if (dns && typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 dotenv.config();
 
 const { Pool } = pg;
+
+// Helper to determine SSL requirements based on environment variables or hostname
+const getSslOption = (configHost?: string, connStr?: string) => {
+  if (process.env.PGSSL === 'false' || process.env.PGSSLMODE === 'disable') {
+    return false;
+  }
+  if (process.env.PGSSL === 'true' || process.env.PGSSLMODE === 'require') {
+    return { rejectUnauthorized: false };
+  }
+  const targetStr = (configHost || connStr || '').toLowerCase();
+  // Enable SSL by default for external/cloud databases (Supabase, Neon, Render, AWS RDS, Heroku, etc.)
+  if (
+    targetStr.includes('supabase') ||
+    targetStr.includes('neon') ||
+    targetStr.includes('render') ||
+    targetStr.includes('amazonaws') ||
+    targetStr.includes('heroku') ||
+    targetStr.includes('sslmode=require') ||
+    (configHost && configHost !== '127.0.0.1' && configHost !== 'localhost' && !configHost.startsWith('10.') && !configHost.startsWith('192.168.'))
+  ) {
+    return { rejectUnauthorized: false };
+  }
+  return false;
+};
 
 // Read JSON configuration file at runtime, if it exists
 let dbConfig: any = {};
@@ -21,9 +52,13 @@ try {
 
 // Instantiate pool based on config
 const createPoolInstance = (config: any) => {
-  if (process.env.DATABASE_URL || config.connectionString) {
+  const connStr = process.env.DATABASE_URL || config.connectionString;
+  const sslOption = getSslOption(config.host, connStr);
+
+  if (connStr) {
     return new Pool({
-      connectionString: process.env.DATABASE_URL || config.connectionString,
+      connectionString: connStr,
+      ssl: sslOption,
       max: parseInt(process.env.PGMAX || String(config.max || 10), 10),
       idleTimeoutMillis: parseInt(process.env.PGIDLE_TIMEOUT || String(config.idleTimeoutMillis || 30000), 10),
       connectionTimeoutMillis: parseInt(process.env.PGCONN_TIMEOUT || String(config.connectionTimeoutMillis || 5000), 10),
@@ -33,9 +68,10 @@ const createPoolInstance = (config: any) => {
   return new Pool({
     host: process.env.PGHOST !== undefined ? process.env.PGHOST : (config.host || '127.0.0.1'),
     port: parseInt(process.env.PGPORT !== undefined ? process.env.PGPORT : String(config.port || 5432), 10),
-    database: process.env.PGDATABASE !== undefined ? process.env.PGDATABASE : (config.database || 'Errandly'),
+    database: process.env.PGDATABASE !== undefined ? process.env.PGDATABASE : (config.database || 'postgres'),
     user: process.env.PGUSER !== undefined ? process.env.PGUSER : (config.user || 'postgres'),
     password: process.env.PGPASSWORD !== undefined ? process.env.PGPASSWORD : (config.password !== undefined ? config.password : ''),
+    ssl: sslOption,
     max: parseInt(process.env.PGMAX || String(config.max || 10), 10),
     idleTimeoutMillis: parseInt(process.env.PGIDLE_TIMEOUT || String(config.idleTimeoutMillis || 30000), 10),
     connectionTimeoutMillis: parseInt(process.env.PGCONN_TIMEOUT || String(config.connectionTimeoutMillis || 5000), 10),

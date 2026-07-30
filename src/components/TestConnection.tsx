@@ -629,7 +629,7 @@ export const TestConnection: React.FC<TestConnectionProps> = ({ apiBaseUrl, onGo
               <p className="text-xs font-mono">Testing database socket & query execution...</p>
             </div>
           ) : dbError ? (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 space-y-2 text-xs">
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 space-y-3 text-xs">
               <div className="flex items-center gap-2 font-bold text-sm">
                 <AlertCircle size={18} />
                 <span>Connection Failure: DISCONNECTED</span>
@@ -637,6 +637,48 @@ export const TestConnection: React.FC<TestConnectionProps> = ({ apiBaseUrl, onGo
               <p className="font-mono text-[11px] leading-relaxed bg-black/40 p-3 rounded-lg border border-red-500/20 overflow-x-auto">
                 {dbError}
               </p>
+              
+              {dbError.includes('ENETUNREACH') && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-300 space-y-2 text-[11px]">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <Zap size={14} className="text-amber-400 shrink-0" />
+                    Render Outbound IPv6 / Connection Advisory:
+                  </p>
+                  <p className="text-sleek-dim leading-relaxed">
+                    The error <code className="text-amber-200">ENETUNREACH</code> happens when the hosting environment (like Render) attempts to connect via an IPv6 address that has no outbound route.
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-slate-300">
+                    <li>We updated the backend server to force <strong>IPv4-first DNS resolution</strong> and <strong>SSL (<code className="text-amber-200">rejectUnauthorized: false</code>)</strong>.</li>
+                    <li>If connecting to Supabase from Render, try using the Supabase IPv4 Pooler Host (e.g., <code className="text-amber-200">aws-0-[region].pooler.supabase.com</code> on port <code className="text-amber-200">6543</code>) or a custom Connection String.</li>
+                  </ul>
+                  <div className="pt-1 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowConfigPanel(true);
+                        setDbConfigForm(prev => ({
+                          ...prev,
+                          port: '6543',
+                          connectionTimeoutMillis: '10000'
+                        }));
+                      }}
+                      className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded text-[10px] font-mono border border-amber-500/30 cursor-pointer"
+                    >
+                      Try Port 6543 (Supabase Pooler)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowConfigPanel(true);
+                      }}
+                      className="px-2.5 py-1 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded text-[10px] font-mono border border-indigo-500/30 cursor-pointer"
+                    >
+                      Open Configuration Form
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <p className="text-[11px] text-red-300">
                 Verify database settings in <code className="text-white">postgres-config.json</code> or runtime environment variables.
               </p>

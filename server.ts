@@ -1,4 +1,11 @@
 import 'dotenv/config';
+import dns from 'dns';
+
+// Ensure Node.js resolves IPv4 first globally for outbound TCP connections
+if (dns && typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
