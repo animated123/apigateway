@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Database, Mail, Lock, Unlock, CheckCircle2, AlertCircle, RefreshCw, 
-  Send, ShieldCheck, Eye, EyeOff, Terminal, ArrowLeft, Play, Server, Zap, Check
+  Send, ShieldCheck, Eye, EyeOff, Terminal, ArrowLeft, Play, Server, Zap, Check,
+  Edit3, Save, Sliders, Globe, Key, FileText, Download, RotateCcw, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 interface TestConnectionProps {
@@ -21,6 +22,25 @@ export const TestConnection: React.FC<TestConnectionProps> = ({ apiBaseUrl, onGo
   const [dbResult, setDbResult] = useState<any>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbLatency, setDbLatency] = useState<number | null>(null);
+
+  // DB Config State
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configSaveLoading, setConfigSaveLoading] = useState(false);
+  const [configSaveSuccess, setConfigSaveSuccess] = useState<string | null>(null);
+  const [configSaveError, setConfigSaveError] = useState<string | null>(null);
+  const [showDbConfigPassword, setShowDbConfigPassword] = useState(false);
+  const [dbConfigForm, setDbConfigForm] = useState({
+    host: 'db.ksflmdvqvseiprebgrcp.supabase.co',
+    port: '5432',
+    database: 'postgres',
+    user: 'postgres',
+    password: '',
+    max: '10',
+    idleTimeoutMillis: '30000',
+    connectionTimeoutMillis: '5000',
+    connectionString: ''
+  });
 
   // Custom SQL Test
   const [customSql, setCustomSql] = useState('SELECT NOW() as current_time, version();');
@@ -48,8 +68,78 @@ export const TestConnection: React.FC<TestConnectionProps> = ({ apiBaseUrl, onGo
     if (saved === 'Company1') {
       setIsUnlocked(true);
       runDbConnectionTest();
+      fetchDbConfig();
     }
   }, []);
+
+  const fetchDbConfig = async () => {
+    setConfigLoading(true);
+    setConfigSaveError(null);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/db/config`);
+      const data = await response.json();
+      if (response.ok && data.success && data.config) {
+        setDbConfigForm({
+          host: data.config.host || '',
+          port: String(data.config.port || 5432),
+          database: data.config.database || '',
+          user: data.config.user || '',
+          password: data.config.password || '',
+          max: String(data.config.max || 10),
+          idleTimeoutMillis: String(data.config.idleTimeoutMillis || 30000),
+          connectionTimeoutMillis: String(data.config.connectionTimeoutMillis || 5000),
+          connectionString: data.config.connectionString || ''
+        });
+      }
+    } catch (err: any) {
+      console.warn('Could not fetch active DB config:', err.message);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleSaveDbConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConfigSaveLoading(true);
+    setConfigSaveError(null);
+    setConfigSaveSuccess(null);
+
+    try {
+      const payload = {
+        host: dbConfigForm.host.trim(),
+        port: parseInt(dbConfigForm.port, 10) || 5432,
+        database: dbConfigForm.database.trim(),
+        user: dbConfigForm.user.trim(),
+        password: dbConfigForm.password,
+        max: parseInt(dbConfigForm.max, 10) || 10,
+        idleTimeoutMillis: parseInt(dbConfigForm.idleTimeoutMillis, 10) || 30000,
+        connectionTimeoutMillis: parseInt(dbConfigForm.connectionTimeoutMillis, 10) || 5000,
+        connectionString: dbConfigForm.connectionString.trim() || undefined
+      };
+
+      const response = await fetch(`${apiBaseUrl}/api/db/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setConfigSaveSuccess('Database configuration updated & connection pool reloaded successfully!');
+        // Automatically run DB test with the new configuration
+        setTimeout(() => {
+          runDbConnectionTest();
+        }, 300);
+      } else {
+        setConfigSaveError(data.error || 'Failed to update database configuration.');
+      }
+    } catch (err: any) {
+      setConfigSaveError(err.message || 'Network error updating database configuration.');
+    } finally {
+      setConfigSaveLoading(false);
+    }
+  };
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +148,7 @@ export const TestConnection: React.FC<TestConnectionProps> = ({ apiBaseUrl, onGo
       setAuthError(null);
       sessionStorage.setItem('test_conn_unlocked', 'Company1');
       runDbConnectionTest();
+      fetchDbConfig();
     } else {
       setAuthError('Incorrect password. Access denied.');
     }
@@ -334,15 +425,202 @@ export const TestConnection: React.FC<TestConnectionProps> = ({ apiBaseUrl, onGo
               </div>
             </div>
 
-            <button
-              onClick={runDbConnectionTest}
-              disabled={dbLoading}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-            >
-              {dbLoading ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
-              <span>Test Connection</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowConfigPanel(!showConfigPanel)}
+                className="px-3 py-1.5 bg-panel-bg hover:bg-sleek-border/40 border border-sleek-border text-indigo-400 hover:text-indigo-300 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer"
+                title="View & Edit Database Configuration"
+              >
+                <Sliders size={14} />
+                <span>Configure DB</span>
+                {showConfigPanel ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              <button
+                onClick={runDbConnectionTest}
+                disabled={dbLoading}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {dbLoading ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />}
+                <span>Test Connection</span>
+              </button>
+            </div>
           </div>
+
+          {/* Collapsible DB Configuration Form */}
+          {showConfigPanel && (
+            <div className="p-4 bg-dashboard-bg/80 border border-indigo-500/30 rounded-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-sleek-border/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <Sliders size={16} className="text-indigo-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">DB Connection Configuration</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={fetchDbConfig}
+                    disabled={configLoading}
+                    className="text-[11px] text-sleek-dim hover:text-white flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw size={12} />
+                    <span>Reload Active</span>
+                  </button>
+                </div>
+              </div>
+
+              {configSaveSuccess && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 size={16} className="shrink-0" />
+                  <span>{configSaveSuccess}</span>
+                </div>
+              )}
+
+              {configSaveError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-center gap-2">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{configSaveError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveDbConfig} className="space-y-3 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Host / Endpoint</label>
+                    <input
+                      type="text"
+                      value={dbConfigForm.host}
+                      onChange={(e) => setDbConfigForm({ ...dbConfigForm, host: e.target.value })}
+                      placeholder="e.g. db.ksflmdvqvseiprebgrcp.supabase.co"
+                      className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Port</label>
+                    <input
+                      type="number"
+                      value={dbConfigForm.port}
+                      onChange={(e) => setDbConfigForm({ ...dbConfigForm, port: e.target.value })}
+                      placeholder="5432"
+                      className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Database Name</label>
+                    <input
+                      type="text"
+                      value={dbConfigForm.database}
+                      onChange={(e) => setDbConfigForm({ ...dbConfigForm, database: e.target.value })}
+                      placeholder="e.g. postgres"
+                      className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Username</label>
+                    <input
+                      type="text"
+                      value={dbConfigForm.user}
+                      onChange={(e) => setDbConfigForm({ ...dbConfigForm, user: e.target.value })}
+                      placeholder="e.g. postgres"
+                      className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Password</label>
+                    <div className="relative">
+                      <input
+                        type={showDbConfigPassword ? 'text' : 'password'}
+                        value={dbConfigForm.password}
+                        onChange={(e) => setDbConfigForm({ ...dbConfigForm, password: e.target.value })}
+                        placeholder="Database password..."
+                        className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDbConfigPassword(!showDbConfigPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sleek-dim hover:text-white p-1"
+                      >
+                        {showDbConfigPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Max Pool Size</label>
+                    <input
+                      type="number"
+                      value={dbConfigForm.max}
+                      onChange={(e) => setDbConfigForm({ ...dbConfigForm, max: e.target.value })}
+                      placeholder="10"
+                      className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Connection Timeout (ms)</label>
+                    <input
+                      type="number"
+                      value={dbConfigForm.connectionTimeoutMillis}
+                      onChange={(e) => setDbConfigForm({ ...dbConfigForm, connectionTimeoutMillis: e.target.value })}
+                      placeholder="5000"
+                      className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1 md:col-span-2">
+                    <label className="text-[10px] font-semibold text-sleek-dim uppercase font-mono">Custom Connection String (Optional Override)</label>
+                    <input
+                      type="text"
+                      value={dbConfigForm.connectionString}
+                      onChange={(e) => setDbConfigForm({ ...dbConfigForm, connectionString: e.target.value })}
+                      placeholder="e.g. postgresql://postgres:password@host:5432/postgres"
+                      className="w-full bg-panel-bg border border-sleek-border rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-sleek-border/40">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDbConfigForm({
+                          host: 'db.ksflmdvqvseiprebgrcp.supabase.co',
+                          port: '5432',
+                          database: 'postgres',
+                          user: 'postgres',
+                          password: 'Company1.Codexict',
+                          max: '10',
+                          idleTimeoutMillis: '30000',
+                          connectionTimeoutMillis: '5000',
+                          connectionString: ''
+                        });
+                      }}
+                      className="px-2.5 py-1.5 bg-panel-bg border border-sleek-border text-sleek-dim hover:text-white rounded-lg text-[11px] font-medium cursor-pointer"
+                    >
+                      Fill Supabase Preset
+                    </button>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={configSaveLoading}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-md flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {configSaveLoading ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                    <span>Save & Apply New Config</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Status Display */}
           {dbLoading ? (
