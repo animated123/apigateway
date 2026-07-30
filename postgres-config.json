@@ -1,9 +1,9 @@
 {
-  "host": "127.0.0.1",
+  "host": "db.ksflmdvqvseiprebgrcp.supabase.co",
   "port": 5432,
-  "database": "Errandly",
+  "database": "postgres",
   "user": "postgres",
-  "password": "fetch",
+  "password": "Company1.Codexict",
   "max": 10,
   "idleTimeoutMillis": 30000,
   "connectionTimeoutMillis": 5000
