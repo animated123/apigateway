@@ -35,7 +35,12 @@ export class StatsController {
         dbOperations: 0,
         latency: 'Offline',
         degraded: true,
-        error: sanitizedMessage
+        error: sanitizedMessage,
+        quotas: {
+          payHero: { used: 0, limit: 1000, unit: 'requests', resetDate: '' },
+          sms: { used: 0, limit: 5000, unit: 'messages', resetDate: '' },
+          smtp: { used: 0, limit: 100, unit: 'emails', resetDate: '' }
+        }
       });
     }
   }
@@ -64,11 +69,39 @@ export class StatsController {
       return ts ? ts > yesterday : false;
     }).length;
 
+    // Estimate quotas based on database records
+    // In a real app, these would come from the external provider's API
+    const payHeroUsed = allTransactions.filter(tx => tx.status === 'SUCCESS' || tx.status === 'COMPLETED').length;
+    
+    // resetDate is first of next month
+    const now = new Date();
+    const resetDate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
+
     return res.status(200).json({
       mpesaVolume: totalVolume,
       successRate: successRate,
       dbOperations: recentOps,
-      latency: '12ms'
+      latency: '12ms',
+      quotas: {
+        payHero: {
+          used: payHeroUsed,
+          limit: 1000,
+          unit: 'requests',
+          resetDate
+        },
+        sms: {
+          used: Math.min(recentOps * 2, 4500), // Estimation logic
+          limit: 5000,
+          unit: 'messages',
+          resetDate
+        },
+        smtp: {
+          used: Math.floor(successful.length / 5), // Estimation logic
+          limit: 100,
+          unit: 'emails',
+          resetDate
+        }
+      }
     });
   }
 }

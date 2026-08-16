@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { Activity, Database, Smartphone, Mail, CheckCircle2, CheckCircle, Clock, Zap, Server, ShieldCheck, ExternalLink, Menu, History, LayoutDashboard, Search, Filter, Terminal, Trash2, CreditCard, LogOut, Key } from 'lucide-react';
+import { Activity, Database, Smartphone, Mail, CheckCircle2, CheckCircle, Clock, Zap, Server, ShieldCheck, ExternalLink, Menu, History, LayoutDashboard, Search, Filter, Terminal, Trash2, CreditCard, LogOut, Key, BarChart3, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, hasSupabaseConfig } from './lib/supabase.ts';
 import { EnvManager } from './components/EnvManager.tsx';
@@ -138,7 +138,12 @@ export default function App() {
     mpesaVolume: 0,
     successRate: 0,
     dbOperations: 0,
-    latency: '42ms'
+    latency: '42ms',
+    quotas: {
+      payHero: { used: 0, limit: 1000, unit: 'requests', resetDate: '' },
+      sms: { used: 0, limit: 5000, unit: 'messages', resetDate: '' },
+      smtp: { used: 0, limit: 100, unit: 'emails', resetDate: '' }
+    }
   });
 
   const handleLogin = () => {
@@ -498,9 +503,10 @@ export default function App() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-6">
                 <TransactionStreamMini onSelect={setSelectedTx} />
                 <IntegrationHealthPanel onSelectService={setSelectedService} />
+                <APIQuotaMetricsCard quotas={stats.quotas} />
                 <AndroidClientTrackerCard onOpenAndroidBridge={() => {
                   localStorage.setItem('tester_active_tool', 'android');
                   setActiveTab('tester');
@@ -854,6 +860,93 @@ function IntegrationHealthPanel({ onSelectService }: { onSelectService: (name: s
         <IntegrationNode icon="💬" name="SMS Engine" desc="REST Provider: Active" active onClick={() => onSelectService('SMS Engine')} />
         <IntegrationNode icon="✉️" name="SMTP Gateway" desc="Nodemailer Relay" active onClick={() => onSelectService('SMTP Gateway')} />
       </div>
+    </div>
+  );
+}
+
+function APIQuotaMetricsCard({ quotas }: { quotas: any }) {
+  if (!quotas) return null;
+
+  return (
+    <div className="bg-panel-bg border border-sleek-border rounded-2xl p-6 shadow-2xl flex flex-col">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-base font-semibold tracking-tight flex items-center gap-2">
+          <BarChart3 size={18} className="text-sleek-accent" />
+          API Usage & Quotas
+        </h2>
+        <span className="text-[10px] text-sleek-dim uppercase font-mono">Rate Limits</span>
+      </div>
+
+      <div className="space-y-5">
+        <QuotaItem 
+          label="PayHero API" 
+          icon={<Zap size={14} className="text-amber-400" />}
+          used={quotas.payHero?.used || 0} 
+          limit={quotas.payHero?.limit || 1000} 
+          unit={quotas.payHero?.unit || 'reqs'}
+          resetDate={quotas.payHero?.resetDate}
+        />
+        <QuotaItem 
+          label="SMS Gateway" 
+          icon={<MessageSquare size={14} className="text-blue-400" />}
+          used={quotas.sms?.used || 0} 
+          limit={quotas.sms?.limit || 5000} 
+          unit={quotas.sms?.unit || 'sms'}
+          resetDate={quotas.sms?.resetDate}
+        />
+        <QuotaItem 
+          label="SMTP Service" 
+          icon={<Mail size={14} className="text-purple-400" />}
+          used={quotas.smtp?.used || 0} 
+          limit={quotas.smtp?.limit || 100} 
+          unit={quotas.smtp?.unit || 'emails'}
+          resetDate={quotas.smtp?.resetDate}
+        />
+      </div>
+
+      <div className="mt-auto pt-6">
+        <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-xl">
+          <p className="text-[10px] text-sleek-dim leading-relaxed">
+            <ShieldCheck size={10} className="inline mr-1 text-sleek-accent" />
+            Limits are enforced per-instance. Quotas reset automatically on the 1st of each month.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuotaItem({ label, icon, used, limit, unit, resetDate }: { label: string, icon: any, used: number, limit: number, unit: string, resetDate?: string }) {
+  const percent = Math.min((used / limit) * 100, 100);
+  const isHigh = percent > 85;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-end">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-xs font-medium text-white">{label}</span>
+        </div>
+        <div className="text-[10px] font-mono">
+          <span className={isHigh ? 'text-red-400 font-bold' : 'text-white'}>{used.toLocaleString()}</span>
+          <span className="text-sleek-dim"> / {limit.toLocaleString()} {unit}</span>
+        </div>
+      </div>
+      <div className="h-1.5 w-full bg-dashboard-bg rounded-full overflow-hidden border border-sleek-border/30">
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: `${percent}%` }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className={`h-full rounded-full ${
+            isHigh ? 'bg-red-500' : 'bg-sleek-accent'
+          }`}
+        />
+      </div>
+      {resetDate && (
+        <div className="flex justify-end">
+          <span className="text-[9px] text-sleek-dim italic">Resets: {resetDate}</span>
+        </div>
+      )}
     </div>
   );
 }

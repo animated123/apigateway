@@ -18,10 +18,11 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      allowedHosts: ['apigateway-iiej.onrender.com'],
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      allowedHosts: true,
       hmr: process.env.DISABLE_HMR !== 'true' ? { port: 5006 } : false,
+    },
+    preview: {
+      allowedHosts: true,
     },
   };
 });
