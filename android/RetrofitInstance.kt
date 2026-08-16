@@ -8,10 +8,9 @@ import java.util.concurrent.TimeUnit
 
 object RetrofitInstance {
 
-    // Configure this accordingly:
+    // Production Cloud API Gateway: "https://gateway.errandly.site/"
     // For local workstation: "http://127.0.0.1:3000/"
-    // For Production: "https://ais-pre-sfwiwu2qvvdcyzjabft4um-22650132817.europe-west1.run.app/"
-    private const val BASE_URL = "http://127.0.0.1:3000/"
+    private const val BASE_URL = "https://gateway.errandly.site/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

@@ -101,13 +101,24 @@ async function startServer() {
         'http://localhost:5006',
         'https://ais-dev-sfwiwu2qvvdcyzjabft4um-22650132817.europe-west1.run.app',
         'https://ais-pre-sfwiwu2qvvdcyzjabft4um-22650132817.europe-west1.run.app',
-        'https://errandly.site/'
+        'https://errandly.site',
+        'https://errandly.site/',
+        'https://gateway.errandly.site',
+        'https://gateway.errandly.site/',
+        'http://gateway.errandly.site',
+        'http://gateway.errandly.site/'
       ];
       
-      if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('run.app')) {
+      if (
+        allowedOrigins.indexOf(origin) !== -1 ||
+        origin.includes('errandly.site') ||
+        origin.includes('run.app') ||
+        origin.includes('onrender.com') ||
+        origin.includes('localhost')
+      ) {
         callback(null, true);
       } else {
-        // Fallback to true for development flexibility, or strictly reject
+        // Permissive fallback so client apps and tools are never blocked by CORS
         callback(null, true); 
       }
     },
@@ -215,6 +226,28 @@ async function startServer() {
   });
 
   app.use('/api', apiRouter);
+
+  // Alias support for direct root calls (/auth, /payments, /notifications, /db, /stats, /health)
+  app.use('/auth', (req, res, next) => {
+    req.url = '/auth' + req.url;
+    apiRouter(req, res, next);
+  });
+  app.use('/payments', (req, res, next) => {
+    req.url = '/payments' + req.url;
+    apiRouter(req, res, next);
+  });
+  app.use('/notifications', (req, res, next) => {
+    req.url = '/notifications' + req.url;
+    apiRouter(req, res, next);
+  });
+  app.use('/db', (req, res, next) => {
+    req.url = '/db' + req.url;
+    apiRouter(req, res, next);
+  });
+  app.use('/stats', (req, res, next) => {
+    req.url = '/stats' + req.url;
+    apiRouter(req, res, next);
+  });
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {

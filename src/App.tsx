@@ -1708,17 +1708,17 @@ function APITesterPage() {
                       </div>
                     </div>
                     <div className="p-4 rounded-xl bg-white/[0.02] border border-sleek-border/30 space-y-1">
-                      <span className="text-[10px] font-mono text-sleek-dim uppercase">Production Cloud Run URL</span>
+                      <span className="text-[10px] font-mono text-sleek-dim uppercase">Production Gateway URL</span>
                       <div className="flex items-center justify-between gap-2">
                         <code className="text-xs font-mono text-indigo-400 truncate">
-                          {API_BASE_URL}/
+                          https://gateway.errandly.site/
                         </code>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(`${API_BASE_URL}/`);
-                            alert('Copied Production URL to clipboard!');
+                            navigator.clipboard.writeText('https://gateway.errandly.site/');
+                            alert('Copied Production Gateway URL to clipboard!');
                           }}
-                          className="text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-sleek-muted shrink-0"
+                          className="text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-sleek-muted shrink-0 cursor-pointer"
                         >
                           Copy
                         </button>
@@ -1829,7 +1829,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitInstance {
-    private const val BASE_URL = "http://127.0.0.1:3000/" // Or your production URL
+    private const val BASE_URL = "https://gateway.errandly.site/" // Or "http://127.0.0.1:3000/" for local emulator
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
