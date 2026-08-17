@@ -269,10 +269,7 @@ export default function App() {
   }
 
   if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} onTestConnection={() => {
-      window.history.pushState({}, '', '/testconnection');
-      setCurrentPath('/testconnection');
-    }} />;
+    return <Login onLogin={handleLogin} />;
   }
 
   return (
@@ -2681,7 +2678,7 @@ function ArrowRight(props: any) {
   );
 }
 
-function Login({ onLogin, onTestConnection }: { onLogin: () => void, onTestConnection?: () => void }) {
+function Login({ onLogin }: { onLogin: () => void }) {
   const [identifier, setIdentifier] = useState('');
   const [code, setCode] = useState('');
   const [step, setStep] = useState<'request' | 'verify'>('request');
@@ -2961,24 +2958,8 @@ function Login({ onLogin, onTestConnection }: { onLogin: () => void, onTestConne
           </form>
         )}
 
-        <div className="mt-8 pt-4 border-t border-sleek-border/20 text-center flex flex-col items-center gap-2">
+        <div className="mt-8 pt-4 border-t border-sleek-border/20 text-center">
           <p className="text-[10px] text-sleek-dim uppercase tracking-[0.2em] font-mono">Company Access Restricted</p>
-          <a
-            href="/testconnection"
-            onClick={(e) => {
-              e.preventDefault();
-              window.history.pushState({}, '', '/testconnection');
-              if (onTestConnection) {
-                onTestConnection();
-              } else {
-                window.dispatchEvent(new Event('popstate'));
-              }
-            }}
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-medium inline-flex items-center gap-1.5 transition-colors pt-1 cursor-pointer"
-          >
-            <Database size={14} />
-            <span>Test DB & Email OTP (/testconnection)</span>
-          </a>
         </div>
       </motion.div>
     </div>
