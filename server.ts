@@ -89,9 +89,9 @@ async function startServer() {
   });
 
   // Middlewares
-  app.use(cors({ 
+  const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl)
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
       
       const allowedOrigins = [
@@ -103,30 +103,66 @@ async function startServer() {
         'https://ais-dev-sfwiwu2qvvdcyzjabft4um-22650132817.europe-west1.run.app',
         'https://ais-pre-sfwiwu2qvvdcyzjabft4um-22650132817.europe-west1.run.app',
         'https://errandly.site',
-        'https://errandly.site/',
+        'http://errandly.site',
+        'https://www.errandly.site',
+        'http://www.errandly.site',
         'https://gateway.errandly.site',
-        'https://gateway.errandly.site/',
         'http://gateway.errandly.site',
-        'http://gateway.errandly.site/'
+        'https://app.errandly.site',
+        'http://app.errandly.site',
+        'https://api.errandly.site',
+        'http://api.errandly.site'
       ];
       
-      if (
-        allowedOrigins.indexOf(origin) !== -1 ||
+      const isAllowed = 
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('errandly.site') ||
         origin.includes('errandly.site') ||
         origin.includes('run.app') ||
         origin.includes('onrender.com') ||
-        origin.includes('localhost')
-      ) {
+        origin.includes('localhost');
+
+      if (isAllowed) {
         callback(null, true);
       } else {
-        // Permissive fallback so client apps and tools are never blocked by CORS
+        // Permissive fallback so client apps and third-party integrations are never blocked
         callback(null, true); 
       }
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-  }));
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'Cache-Control',
+      'X-Api-Key',
+      'X-CSRF-Token'
+    ],
+    exposedHeaders: ['Content-Length', 'X-Total-Count', 'Authorization'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+  };
+
+  app.use(cors(corsOptions));
+  app.options('*', cors(corsOptions));
+
+  // Additional CORS fallback headers middleware
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && (origin.includes('errandly.site') || origin.includes('localhost') || origin.includes('run.app'))) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, X-Api-Key, X-CSRF-Token');
+    }
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
