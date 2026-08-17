@@ -9,6 +9,7 @@ if (dns && typeof dns.setDefaultResultOrder === 'function') {
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { PaymentController } from './src/controllers/paymentController.ts';
 import { SMSController } from './src/controllers/smsController.ts';
@@ -249,6 +250,14 @@ async function startServer() {
     apiRouter(req, res, next);
   });
 
+  // Process crash protection
+  process.on('uncaughtException', (err) => {
+    console.error('[UNCAUGHT EXCEPTION]', err);
+  });
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('[UNHANDLED REJECTION]', reason);
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -259,9 +268,25 @@ async function startServer() {
   } else {
     // Production: serve static files from dist
     const distPath = path.join(process.cwd(), 'dist');
+    const indexPath = path.join(distPath, 'index.html');
+    
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(200).send(`
+          <!DOCTYPE html>
+          <html>
+            <head><title>Errandly Gateway API</title></head>
+            <body style="font-family: sans-serif; background: #0b0f19; color: #f8fafc; padding: 40px; text-align: center;">
+              <h2>Errandly API Backend is Active 🚀</h2>
+              <p style="color: #94a3b8;">The backend server is running on Port 3000. To render the complete dashboard UI, run <code>npm run build</code> on your server.</p>
+              <p><a href="/api/health" style="color: #6366f1;">Check /api/health</a></p>
+            </body>
+          </html>
+        `);
+      }
     });
   }
 
