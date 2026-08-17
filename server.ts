@@ -133,49 +133,49 @@ async function startServer() {
   // Basic connectivity test (Ping)
   app.get('/ping', (req, res) => res.send('pong'));
 
-  // API Routes
-  const apiRouter = express.Router();
+  // Sub-routers
+  const authRouter = express.Router();
+  authRouter.post('/register', AuthController.register);
+  authRouter.post('/login', AuthController.login);
+  authRouter.post('/send-code', AuthController.sendLoginCode);
+  authRouter.post('/verify-login-code', AuthController.verifyLoginCode);
+  authRouter.get('/me', authenticateToken, AuthController.getMe);
 
-  // Payment Routes
-  apiRouter.post('/payments/stk-push', PaymentController.stkPush);
-  apiRouter.post('/payments/callback', PaymentController.callback);
-  apiRouter.post('/payments/paystack/initialize', PaymentController.initializePaystack);
-  apiRouter.post('/payments/paystack/stk-push', PaymentController.stkPushPaystack);
-  apiRouter.post('/payments/paystack/webhook', PaymentController.paystackWebhook);
-  apiRouter.get('/payments/debug/:reference', PaymentController.debugTransaction);
-  apiRouter.get('/payments/status', PaymentController.checkStatus);
-  apiRouter.post('/payments/cleanup', PaymentController.cleanupStale);
+  const paymentRouter = express.Router();
+  paymentRouter.post('/stk-push', PaymentController.stkPush);
+  paymentRouter.post('/callback', PaymentController.callback);
+  paymentRouter.post('/paystack/initialize', PaymentController.initializePaystack);
+  paymentRouter.post('/paystack/stk-push', PaymentController.stkPushPaystack);
+  paymentRouter.post('/paystack/webhook', PaymentController.paystackWebhook);
+  paymentRouter.get('/debug/:reference', PaymentController.debugTransaction);
+  paymentRouter.get('/status', PaymentController.checkStatus);
+  paymentRouter.post('/cleanup', PaymentController.cleanupStale);
 
-  // Notification Routes (Renamed to use SMSController)
-  apiRouter.post('/notifications/send-otp', SMSController.sendOTP);
-  apiRouter.post('/notifications/verify-otp', SMSController.verifyOTP);
-  apiRouter.post('/notifications/send-email', SMSController.sendTransactionalEmail);
-  apiRouter.get('/notifications/send-email', SMSController.sendTransactionalEmail);
-  apiRouter.post('/notifications/verify-email', SMSController.verifyEmail);
-  apiRouter.get('/notifications/verify-email', SMSController.verifyEmail);
-  apiRouter.post('/proxy/verify-email', SMSController.verifyEmail);
-  apiRouter.get('/proxy/verify-email', SMSController.verifyEmail);
-  apiRouter.post('/proxy/send-email', SMSController.sendTransactionalEmail);
-  apiRouter.get('/proxy/send-email', SMSController.sendTransactionalEmail);
+  const notificationRouter = express.Router();
+  notificationRouter.post('/send-otp', SMSController.sendOTP);
+  notificationRouter.post('/verify-otp', SMSController.verifyOTP);
+  notificationRouter.post('/send-email', SMSController.sendTransactionalEmail);
+  notificationRouter.get('/send-email', SMSController.sendTransactionalEmail);
+  notificationRouter.post('/verify-email', SMSController.verifyEmail);
+  notificationRouter.get('/verify-email', SMSController.verifyEmail);
 
-  // Health check
-  apiRouter.get('/health', (req, res) => {
-    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
-  });
+  const dbRouter = express.Router();
+  dbRouter.post('/transactions', DBController.createTransaction);
+  dbRouter.get('/balance/:userId', DBController.getBalance);
+  dbRouter.post('/profiles/select', DBController.selectProfile);
+  dbRouter.post('/transactions/select', DBController.selectTransactions);
+  dbRouter.get('/query', DBController.queryGeneric);
+  dbRouter.post('/update', DBController.updateGeneric);
+  dbRouter.post('/test-connection', DBController.testConnectionAndRunQuery);
+  dbRouter.get('/config', DBController.getPostgresConfig);
+  dbRouter.post('/config', DBController.savePostgresConfig);
 
-  // Dashboard Stats
-  apiRouter.get('/stats/dashboard', StatsController.getDashboardStats);
+  const statsRouter = express.Router();
+  statsRouter.get('/dashboard', StatsController.getDashboardStats);
 
-  // Authentication Routes (jsonwebtoken & bcryptjs)
-  apiRouter.post('/auth/register', AuthController.register);
-  apiRouter.post('/auth/login', AuthController.login);
-  apiRouter.post('/auth/send-code', AuthController.sendLoginCode);
-  apiRouter.post('/auth/verify-login-code', AuthController.verifyLoginCode);
-  apiRouter.get('/auth/me', authenticateToken, AuthController.getMe);
-
-  // Secure endpoints (Requiring valid Authorization Bearer token)
-  apiRouter.get('/secure/profiles/me', authenticateToken, AuthController.getMe);
-  apiRouter.get('/secure/transactions', authenticateToken, async (req, res) => {
+  const secureRouter = express.Router();
+  secureRouter.get('/profiles/me', authenticateToken, AuthController.getMe);
+  secureRouter.get('/transactions', authenticateToken, async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ success: false, error: 'Access unauthorized: user context not found' });
@@ -190,64 +190,66 @@ async function startServer() {
       return res.status(500).json({ success: false, error: 'Failed to retrieve secure transactions.' });
     }
   });
-  apiRouter.get('/secure/stats', authenticateToken, StatsController.getDashboardStats);
+  secureRouter.get('/stats', authenticateToken, StatsController.getDashboardStats);
 
-  // Supabase Proxy Routes
-  apiRouter.post('/db/transactions', DBController.createTransaction);
-  apiRouter.get('/db/balance/:userId', DBController.getBalance);
-  apiRouter.post('/db/profiles/select', DBController.selectProfile);
-  apiRouter.post('/db/transactions/select', DBController.selectTransactions);
-  apiRouter.get('/db/query', DBController.queryGeneric);
-  apiRouter.post('/db/update', DBController.updateGeneric);
-  apiRouter.post('/db/test-connection', DBController.testConnectionAndRunQuery);
-  apiRouter.get('/db/config', DBController.getPostgresConfig);
-  apiRouter.post('/db/config', DBController.savePostgresConfig);
-
-  // Admin Diagnostics Logs Routes
-  apiRouter.get('/admin/logs', (req, res) => {
+  const adminRouter = express.Router();
+  adminRouter.get('/logs', (req, res) => {
     res.status(200).json({ logs: logsBuffer });
   });
-
-  apiRouter.post('/admin/logs/clear', (req, res) => {
+  adminRouter.post('/logs/clear', (req, res) => {
     logsBuffer = [];
     console.log('[SYSTEM] Circular logs buffer cleared by administrator.');
     res.status(200).json({ success: true, message: 'Logs cleared successfully' });
   });
+  adminRouter.post('/env/verify', EnvController.verifyPassword);
+  adminRouter.post('/env/change-password', EnvController.changePassword);
+  adminRouter.post('/env/get', EnvController.getEnvVars);
+  adminRouter.post('/env/update', EnvController.updateEnvVar);
+  adminRouter.post('/env/delete', EnvController.deleteEnvVar);
 
-  // Protected Environment Variables Management Routes
-  apiRouter.post('/admin/env/verify', EnvController.verifyPassword);
-  apiRouter.post('/admin/env/change-password', EnvController.changePassword);
-  apiRouter.post('/admin/env/get', EnvController.getEnvVars);
-  apiRouter.post('/admin/env/update', EnvController.updateEnvVar);
-  apiRouter.post('/admin/env/delete', EnvController.deleteEnvVar);
+  // Health checks
+  const handleHealth = (req: express.Request, res: express.Response) => {
+    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+  };
+  app.get('/health', handleHealth);
+  app.get('/api/health', handleHealth);
 
-  // Catch-all for undefined API routes
-  apiRouter.all('*', (req, res) => {
+  // Email/SMS proxy routes
+  app.post('/proxy/verify-email', SMSController.verifyEmail);
+  app.get('/proxy/verify-email', SMSController.verifyEmail);
+  app.post('/proxy/send-email', SMSController.sendTransactionalEmail);
+  app.get('/proxy/send-email', SMSController.sendTransactionalEmail);
+  app.post('/api/proxy/verify-email', SMSController.verifyEmail);
+  app.get('/api/proxy/verify-email', SMSController.verifyEmail);
+  app.post('/api/proxy/send-email', SMSController.sendTransactionalEmail);
+  app.get('/api/proxy/send-email', SMSController.sendTransactionalEmail);
+
+  // Mount routers to BOTH /api/* and root /*
+  // This ensures that whether Nginx passes full paths (/api/auth/send-code) or strips prefixes (/auth/send-code), requests are handled seamlessly.
+  app.use('/api/auth', authRouter);
+  app.use('/auth', authRouter);
+
+  app.use('/api/payments', paymentRouter);
+  app.use('/payments', paymentRouter);
+
+  app.use('/api/notifications', notificationRouter);
+  app.use('/notifications', notificationRouter);
+
+  app.use('/api/db', dbRouter);
+  app.use('/db', dbRouter);
+
+  app.use('/api/stats', statsRouter);
+  app.use('/stats', statsRouter);
+
+  app.use('/api/secure', secureRouter);
+  app.use('/secure', secureRouter);
+
+  app.use('/api/admin', adminRouter);
+  app.use('/admin', adminRouter);
+
+  // Catch-all for undefined /api/* routes
+  app.all('/api/*', (req, res) => {
     res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
-  });
-
-  app.use('/api', apiRouter);
-
-  // Alias support for direct root calls (/auth, /payments, /notifications, /db, /stats, /health)
-  app.use('/auth', (req, res, next) => {
-    req.url = '/auth' + req.url;
-    apiRouter(req, res, next);
-  });
-  app.use('/payments', (req, res, next) => {
-    req.url = '/payments' + req.url;
-    apiRouter(req, res, next);
-  });
-  app.use('/notifications', (req, res, next) => {
-    req.url = '/notifications' + req.url;
-    apiRouter(req, res, next);
-  });
-  app.use('/db', (req, res, next) => {
-    req.url = '/db' + req.url;
-    apiRouter(req, res, next);
-  });
-  app.use('/stats', (req, res, next) => {
-    req.url = '/stats' + req.url;
-    apiRouter(req, res, next);
   });
 
   // Process crash protection
