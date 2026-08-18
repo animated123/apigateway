@@ -263,26 +263,35 @@ export class AuthController {
         });
       }
 
-      // Step 5: Lock the user from requesting another code untill the one originally requested hits expiry time.
-      const nowStr = new Date().toISOString();
+      // Step 5: Lock the user from requesting another code until the active one expires.
+      const now = Date.now();
       const activeCodeCheck = await query(
-        'SELECT * FROM otp_codes WHERE "email/phone" = $1 AND expires_at > $2 AND used = FALSE LIMIT 1',
-        [cleanIdentifier, nowStr]
+        'SELECT * FROM otp_codes WHERE "email/phone" = $1 AND used = FALSE ORDER BY created_at DESC LIMIT 1',
+        [cleanIdentifier]
       );
 
       if (activeCodeCheck.rows.length > 0) {
         const activeCode = activeCodeCheck.rows[0];
         const expiresAtDate = new Date(activeCode.expires_at);
-        const timeLeftMs = expiresAtDate.getTime() - Date.now();
-        const timeLeftSec = Math.max(0, Math.ceil(timeLeftMs / 1000));
+        const timeLeftMs = expiresAtDate.getTime() - now;
+        const timeLeftSec = Math.ceil(timeLeftMs / 1000);
 
-        return res.status(429).json({
-          success: false,
-          error: `A verification code has already been requested. Please wait ${timeLeftSec} seconds until the active code expires.`,
-          expiresAt: activeCode.expires_at,
-          sessionId: activeCode.id
-        });
+        // Only lock if there is genuinely more than 1 second remaining
+        if (timeLeftSec > 1) {
+          return res.status(429).json({
+            success: false,
+            error: `A verification code has already been requested. Please wait ${timeLeftSec} seconds until the active code expires.`,
+            expiresAt: activeCode.expires_at,
+            sessionId: activeCode.id
+          });
+        }
       }
+
+      // Invalidate any past unused codes for this identifier before generating a fresh one
+      await query(
+        'UPDATE otp_codes SET used = TRUE WHERE "email/phone" = $1 AND used = FALSE',
+        [cleanIdentifier]
+      );
 
       // Step 4: Generate a code and store it on table otp_codes filling; Id(generated for the session), email/phone number used(column: email/phone), code generated, expires_at, created_at and whether its used.
       const sessionId = `SESS-${Math.random().toString(36).substring(2, 12).toUpperCase()}`;

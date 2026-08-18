@@ -2698,12 +2698,18 @@ function Login({ onLogin }: { onLogin: () => void }) {
       return Math.max(0, Math.ceil(diff / 1000));
     };
 
-    setCountdown(calculateCountdown());
+    const initialRemaining = calculateCountdown();
+    setCountdown(initialRemaining);
+    if (initialRemaining <= 0) {
+      setError(prev => prev.includes('Please wait') ? '' : prev);
+      return;
+    }
 
     const timer = setInterval(() => {
       const remaining = calculateCountdown();
       setCountdown(remaining);
       if (remaining <= 0) {
+        setError(prev => prev.includes('Please wait') ? '' : prev);
         clearInterval(timer);
       }
     }, 1000);
@@ -2744,10 +2750,18 @@ function Login({ onLogin }: { onLogin: () => void }) {
       if (!response.ok || !data.success) {
         // Step 5: If locked, recover the active session and countdown details dynamically
         if (data.expiresAt && data.sessionId) {
+          const expTime = new Date(data.expiresAt).getTime();
+          const remainingSec = Math.max(0, Math.ceil((expTime - Date.now()) / 1000));
+
           setSessionId(data.sessionId);
           setExpiresAt(data.expiresAt);
           setStep('verify');
-          setError(data.error || 'A verification code is already active.');
+          
+          if (remainingSec > 1) {
+            setError(data.error || `A verification code is already active. Please wait ${remainingSec}s.`);
+          } else {
+            setError('');
+          }
           return;
         }
         throw new Error(data.error || 'Failed to send verification code.');
