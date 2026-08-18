@@ -606,4 +606,145 @@ export class PaymentController {
       return res.status(500).json({ error: error.message });
     }
   }
+
+  /**
+   * Dedicated verifyStatus for Action Server specifications (POST/GET /api/payments/verify-status)
+   */
+  static async verifyStatus(req: Request, res: Response) {
+    const raw = { ...req.query, ...req.body, ...req.params };
+    const reference = raw.reference || raw.txId || raw.tx_ref || raw.ref;
+
+    if (!reference || typeof reference !== 'string') {
+      return res.status(400).json({ success: false, error: 'Valid transaction reference required in request body or query.' });
+    }
+
+    try {
+      // 1. Query database for local transaction
+      const txRes = await query(`
+        SELECT * FROM transactions
+        WHERE LOWER(reference) = LOWER($1)
+        LIMIT 1
+      `, [reference]);
+
+      const tx = txRes.rows[0];
+
+      if (!tx) {
+        return res.status(404).json({
+          success: false,
+          status: 'NOT_FOUND',
+          reference,
+          error: `Transaction reference '${reference}' not found.`
+        });
+      }
+
+      // If already terminal in DB, return immediately
+      if (tx.is_closed || tx.status === 'COMPLETED' || tx.status === 'FAILED') {
+        return res.status(200).json({
+          success: true,
+          status: tx.status,
+          reference: tx.reference,
+          amount: tx.amount,
+          phone_number: tx.phone_number,
+          provider: tx.provider,
+          description: tx.description,
+          is_closed: tx.is_closed,
+          created_at: tx.created_at,
+          transaction: tx
+        });
+      }
+
+      // 2. If PENDING, perform active provider reconciliation
+      if (tx.provider === 'paystack') {
+        try {
+          const result = await paystack.verifyTransaction(reference);
+          const mappedStatus = result.status === 'success' ? 'COMPLETED' : 
+                              (result.status === 'failed' || result.status === 'abandoned') ? 'FAILED' : 'PENDING';
+
+          const isTerminal = mappedStatus === 'COMPLETED' || mappedStatus === 'FAILED';
+          await query(`
+            UPDATE transactions
+            SET status = $1,
+                is_closed = $2,
+                closed_at = CASE WHEN $2 = true THEN CURRENT_TIMESTAMP ELSE closed_at END
+            WHERE LOWER(reference) = LOWER($3)
+          `, [mappedStatus, isTerminal, reference]);
+
+          if (mappedStatus === 'COMPLETED' && tx.user_id && tx.amount) {
+            await query(`
+              UPDATE profiles 
+              SET balance = balance + $1 
+              WHERE id = $2
+            `, [Number(tx.amount), tx.user_id]);
+          }
+
+          return res.status(200).json({
+            success: true,
+            status: mappedStatus,
+            reference: tx.reference,
+            amount: tx.amount,
+            provider: 'paystack',
+            providerData: result,
+            transaction: { ...tx, status: mappedStatus, is_closed: isTerminal }
+          });
+        } catch (err: any) {
+          console.warn('[verifyStatus] Paystack verify error:', err.message);
+        }
+      } else {
+        // PayHero / M-Pesa
+        try {
+          const rawResult = await payHero.queryStatus(reference, tx.checkout_request_id);
+          const result = rawResult.response || rawResult;
+          const rawStatus = (result.Status || result.status || '').toString().toLowerCase();
+          const resultCode = result.ResultCode !== undefined ? Number(result.ResultCode) : null;
+          
+          const isSuccessful = rawStatus === 'success' || rawStatus === 'successful' || rawStatus === 'ok' || resultCode === 0;
+          const isFailed = rawStatus === 'cancelled' || rawStatus === 'failed' || (resultCode !== null && resultCode !== 0);
+          const mappedStatus = isSuccessful ? 'COMPLETED' : (isFailed ? 'FAILED' : 'PENDING');
+          const isTerminal = isSuccessful || isFailed;
+
+          if (isTerminal) {
+            await query(`
+              UPDATE transactions
+              SET status = $1,
+                  is_closed = $2,
+                  closed_at = CASE WHEN $2 = true THEN CURRENT_TIMESTAMP ELSE closed_at END
+              WHERE LOWER(reference) = LOWER($3)
+            `, [mappedStatus, isTerminal, reference]);
+
+            if (mappedStatus === 'COMPLETED' && tx.user_id && tx.amount) {
+              await query(`
+                UPDATE profiles 
+                SET balance = balance + $1 
+                WHERE id = $2
+              `, [Number(tx.amount), tx.user_id]);
+            }
+          }
+
+          return res.status(200).json({
+            success: true,
+            status: mappedStatus,
+            reference: tx.reference,
+            amount: tx.amount,
+            provider: 'payhero',
+            providerData: result,
+            transaction: { ...tx, status: mappedStatus, is_closed: isTerminal }
+          });
+        } catch (err: any) {
+          console.warn('[verifyStatus] PayHero query error:', err.message);
+        }
+      }
+
+      // Return current status
+      return res.status(200).json({
+        success: true,
+        status: tx.status,
+        reference: tx.reference,
+        amount: tx.amount,
+        transaction: tx
+      });
+    } catch (error: any) {
+      console.error('[verifyStatus] Error:', error.message);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
 }

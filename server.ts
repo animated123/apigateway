@@ -17,6 +17,8 @@ import { StatsController } from './src/controllers/statsController.ts';
 import { DBController } from './src/controllers/dbController.ts';
 import { AuthController } from './src/controllers/authController.ts';
 import { EnvController } from './src/controllers/envController.ts';
+import { WhatsAppController } from './src/controllers/whatsappController.ts';
+import { BackgroundScheduler } from './src/services/scheduler.ts';
 import { authenticateToken } from './src/middleware/auth.ts';
 import { query } from './src/lib/postgres.ts';
 
@@ -180,9 +182,13 @@ async function startServer() {
   const paymentRouter = express.Router();
   paymentRouter.post('/stk-push', PaymentController.stkPush);
   paymentRouter.post('/callback', PaymentController.callback);
+  paymentRouter.post('/mpesa/callback', PaymentController.callback); // Direct Daraja / M-Pesa STK push callback alias
   paymentRouter.post('/paystack/initialize', PaymentController.initializePaystack);
   paymentRouter.post('/paystack/stk-push', PaymentController.stkPushPaystack);
   paymentRouter.post('/paystack/webhook', PaymentController.paystackWebhook);
+  paymentRouter.post('/verify-status', PaymentController.verifyStatus);
+  paymentRouter.get('/verify-status', PaymentController.verifyStatus);
+  paymentRouter.get('/verify-status/:reference', PaymentController.verifyStatus);
   paymentRouter.get('/debug/:reference', PaymentController.debugTransaction);
   paymentRouter.get('/status', PaymentController.checkStatus);
   paymentRouter.post('/cleanup', PaymentController.cleanupStale);
@@ -194,6 +200,23 @@ async function startServer() {
   notificationRouter.get('/send-email', SMSController.sendTransactionalEmail);
   notificationRouter.post('/verify-email', SMSController.verifyEmail);
   notificationRouter.get('/verify-email', SMSController.verifyEmail);
+
+  // Direct SMS Router
+  const smsRouter = express.Router();
+  smsRouter.post('/send', SMSController.sendDirectSMS);
+  smsRouter.post('/verify/send-otp', SMSController.sendOTP);
+  smsRouter.post('/verify/verify-otp', SMSController.verifyOTP);
+
+  // Direct Email Router
+  const emailRouter = express.Router();
+  emailRouter.post('/send', SMSController.sendTransactionalEmail);
+  emailRouter.get('/send', SMSController.sendTransactionalEmail);
+
+  // WhatsApp Gateway Router
+  const whatsappRouter = express.Router();
+  whatsappRouter.post('/send', WhatsAppController.sendMessage);
+  whatsappRouter.get('/webhook', WhatsAppController.verifyWebhook);
+  whatsappRouter.post('/webhook', WhatsAppController.handleWebhook);
 
   const dbRouter = express.Router();
   dbRouter.post('/transactions', DBController.createTransaction);
@@ -245,7 +268,11 @@ async function startServer() {
 
   // Health checks
   const handleHealth = (req: express.Request, res: express.Response) => {
-    res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      service: 'Errandly Gateway Action Server',
+      timestamp: new Date().toISOString()
+    });
   };
   app.get('/health', handleHealth);
   app.get('/api/health', handleHealth);
@@ -270,6 +297,15 @@ async function startServer() {
 
   app.use('/api/notifications', notificationRouter);
   app.use('/notifications', notificationRouter);
+
+  app.use('/api/sms', smsRouter);
+  app.use('/sms', smsRouter);
+
+  app.use('/api/email', emailRouter);
+  app.use('/email', emailRouter);
+
+  app.use('/api/whatsapp', whatsappRouter);
+  app.use('/whatsapp', whatsappRouter);
 
   app.use('/api/db', dbRouter);
   app.use('/db', dbRouter);
@@ -333,6 +369,12 @@ async function startServer() {
   app.listen(port, "0.0.0.0", () => {
     console.log(`[SYSTEM] Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`[SYSTEM] Professional Backend running at http://0.0.0.0:${port}`);
+    // Start background jobs & workers
+    try {
+      BackgroundScheduler.start();
+    } catch (schedErr: any) {
+      console.warn('[SYSTEM] Background scheduler failed to initialize:', schedErr.message);
+    }
   });
 }
 

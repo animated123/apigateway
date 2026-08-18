@@ -1,44 +1,68 @@
 import nodemailer from 'nodemailer';
 
 export class EmailService {
-  private static transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  private static transporter: nodemailer.Transporter | null = null;
+
+  private static getTransporter(): nodemailer.Transporter {
+    if (!this.transporter) {
+      const port = parseInt(process.env.SMTP_PORT || '587', 10);
+      const isSecure = port === 465;
+
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: port,
+        secure: isSecure,
+        pool: true, // pooled persistent connections for high-throughput action servers
+        maxConnections: 5,
+        maxMessages: 100,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+    }
+    return this.transporter;
+  }
 
   static async sendMail(to: string, subject: string, html: string, text?: string) {
     try {
-      const info = await this.transporter.sendMail({
-        from: process.env.SMTP_FROM,
+      const transporter = this.getTransporter();
+      const from = process.env.SMTP_FROM || `"Errandly Gateway" <${process.env.SMTP_USER || 'no-reply@errandly.site'}>`;
+
+      const info = await transporter.sendMail({
+        from,
         to,
         subject,
         text: text || html.replace(/<[^>]*>?/gm, ''), // Simple text fallback
         html,
       });
-      console.log('Message sent: %s', info.messageId);
-      return info;
-    } catch (error) {
-      console.error('Email Send Error:', error);
-      throw new Error('Failed to send email');
+
+      console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
+      return {
+        success: true,
+        messageId: info.messageId || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        response: info.response
+      };
+    } catch (error: any) {
+      console.error('[EmailService] Email Send Error:', error.message || error);
+      throw new Error(`Failed to send email: ${error.message || 'SMTP delivery failure'}`);
     }
   }
 
   static async sendWelcomeEmail(to: string, name: string) {
     const html = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-        <h1 style="color: #333;">Welcome to Our App, ${name}!</h1>
+        <h1 style="color: #333;">Welcome to Errandly, ${name}!</h1>
         <p>We're excited to have you on board. Your account has been successfully created.</p>
         <div style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 5px;">
           <p style="margin: 0; color: #666;">If you have any questions, feel free to reply to this email.</p>
         </div>
       </div>
     `;
-    return this.sendMail(to, 'Welcome to Our Professional Backend!', html);
+    return this.sendMail(to, 'Welcome to Errandly!', html);
   }
 
   static async sendPaymentConfirmation(to: string, amount: number, reference: string) {
@@ -47,10 +71,10 @@ export class EmailService {
         <h1 style="color: #10b981;">Payment Received!</h1>
         <p>We've received your payment of <b>KES ${amount}</b>.</p>
         <p><b>Reference:</b> ${reference}</p>
-        <p>Thank you for using our service!</p>
+        <p>Thank you for using Errandly!</p>
       </div>
     `;
-    return this.sendMail(to, 'Payment Confirmation', html);
+    return this.sendMail(to, 'Payment Confirmation - Errandly', html);
   }
 
   static async sendOTPEmail(to: string, code: string) {
