@@ -263,40 +263,36 @@ export class AuthController {
         });
       }
 
-      // Step 5: Lock the user from requesting another code until the active one expires.
+      // Step 5: Rate limit code requests with a 30-second resend cooldown
       const now = Date.now();
-      const activeCodeCheck = await query(
-        'SELECT * FROM otp_codes WHERE "email/phone" = $1 AND used = FALSE ORDER BY created_at DESC LIMIT 1',
+      const recentCodeCheck = await query(
+        'SELECT * FROM otp_codes WHERE LOWER("email/phone") = LOWER($1) AND used = FALSE ORDER BY created_at DESC LIMIT 1',
         [cleanIdentifier]
       );
 
-      if (activeCodeCheck.rows.length > 0) {
-        const activeCode = activeCodeCheck.rows[0];
-        const expiresAtDate = new Date(activeCode.expires_at);
-        const timeLeftMs = expiresAtDate.getTime() - now;
-        const timeLeftSec = Math.ceil(timeLeftMs / 1000);
-
-        // Only lock if there is genuinely more than 1 second remaining
-        if (timeLeftSec > 1) {
+      if (recentCodeCheck.rows.length > 0) {
+        const recentCode = recentCodeCheck.rows[0];
+        const createdAtTime = new Date(recentCode.created_at || recentCode.expires_at).getTime();
+        const secondsSinceCreation = Math.floor((now - createdAtTime) / 1000);
+        
+        // Enforce a 30-second cooldown between requesting new codes
+        const COOLDOWN_SEC = 30;
+        if (secondsSinceCreation >= 0 && secondsSinceCreation < COOLDOWN_SEC) {
+          const waitTime = COOLDOWN_SEC - secondsSinceCreation;
           return res.status(429).json({
             success: false,
-            error: `A verification code has already been requested. Please wait ${timeLeftSec} seconds until the active code expires.`,
-            expiresAt: activeCode.expires_at,
-            sessionId: activeCode.id
+            error: `Please wait ${waitTime}s before requesting another verification code.`,
+            expiresAt: recentCode.expires_at,
+            sessionId: recentCode.id
           });
         }
       }
 
-      // Invalidate any past unused codes for this identifier before generating a fresh one
-      await query(
-        'UPDATE otp_codes SET used = TRUE WHERE "email/phone" = $1 AND used = FALSE',
-        [cleanIdentifier]
-      );
-
-      // Step 4: Generate a code and store it on table otp_codes filling; Id(generated for the session), email/phone number used(column: email/phone), code generated, expires_at, created_at and whether its used.
+      // Step 4: Generate a code and store it on table otp_codes.
+      // Codes are valid for 10 minutes (600 seconds) to ensure plenty of time for email/SMS delivery.
       const sessionId = `SESS-${Math.random().toString(36).substring(2, 12).toUpperCase()}`;
       const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 120 * 1000).toISOString(); // 2 minute countdown expiry
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes validity
 
       await query(
         'INSERT INTO otp_codes (id, "email/phone", code, expires_at, created_at, used) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, FALSE)',
@@ -348,7 +344,7 @@ export class AuthController {
     const cleanCode = code.trim();
 
     try {
-      // Step 6: When user inputs the code, compare with the one in the otp_codes for the specific session and give acces if correct otherwise give an error message.
+      // Step 6: Verify OTP code
       const isBypass = cleanCode === '123456' || cleanCode === '123458';
       let otpRecord = null;
       let isValid = false;
@@ -356,46 +352,41 @@ export class AuthController {
       if (isBypass) {
         isValid = true;
       } else {
-        let finalSessionId = sessionId;
-        if (!finalSessionId) {
-          // fallback lookup latest unused active code for this identifier
-          const fallbackCheck = await query(
-            'SELECT * FROM otp_codes WHERE "email/phone" = $1 AND code = $2 AND used = FALSE AND expires_at > $3 ORDER BY expires_at DESC LIMIT 1',
-            [cleanIdentifier, cleanCode, new Date().toISOString()]
-          );
-          if (fallbackCheck.rows.length > 0) {
-            finalSessionId = fallbackCheck.rows[0].id;
-          }
+        // Look for the code matching this user's email or phone number
+        const result = await query(
+          'SELECT * FROM otp_codes WHERE LOWER("email/phone") = LOWER($1) AND code = $2 ORDER BY created_at DESC LIMIT 1',
+          [cleanIdentifier, cleanCode]
+        );
+
+        if (result.rows.length === 0) {
+          return res.status(401).json({
+            success: false,
+            error: 'Verification failed: Invalid verification code. Please check and try again.'
+          });
         }
 
-        if (finalSessionId) {
-          const result = await query(
-            'SELECT * FROM otp_codes WHERE id = $1 AND "email/phone" = $2 AND code = $3 LIMIT 1',
-            [finalSessionId, cleanIdentifier, cleanCode]
-          );
+        otpRecord = result.rows[0];
 
-          if (result.rows.length > 0) {
-            otpRecord = result.rows[0];
-            
-            if (new Date(otpRecord.expires_at).getTime() < Date.now()) {
-              return res.status(401).json({
-                success: false,
-                error: 'Verification failed: Code has expired.'
-              });
-            }
-
-            if (otpRecord.used) {
-              return res.status(401).json({
-                success: false,
-                error: 'Verification failed: Code has already been used.'
-              });
-            }
-
-            isValid = true;
-            // Mark as used
-            await query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [finalSessionId]);
-          }
+        // Check if code has expired
+        const expiresAtTime = new Date(otpRecord.expires_at).getTime();
+        if (expiresAtTime < Date.now()) {
+          return res.status(401).json({
+            success: false,
+            error: 'Verification failed: This code has expired. Please click "Request another code".'
+          });
         }
+
+        // Check if code was already used
+        if (otpRecord.used) {
+          return res.status(401).json({
+            success: false,
+            error: 'Verification failed: This code was already used. Please request a new code.'
+          });
+        }
+
+        isValid = true;
+        // Mark as used
+        await query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [otpRecord.id]);
       }
 
       if (!isValid) {

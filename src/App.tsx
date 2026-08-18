@@ -2686,36 +2686,24 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [sessionId, setSessionId] = useState('');
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(0);
 
-  // Manage verification code countdown lock timer
+  // Manage 30-second resend cooldown timer
   useEffect(() => {
-    if (!expiresAt) return;
-    const calculateCountdown = () => {
-      const exp = new Date(expiresAt).getTime();
-      const diff = exp - Date.now();
-      return Math.max(0, Math.ceil(diff / 1000));
-    };
-
-    const initialRemaining = calculateCountdown();
-    setCountdown(initialRemaining);
-    if (initialRemaining <= 0) {
-      setError(prev => prev.includes('Please wait') ? '' : prev);
-      return;
-    }
+    if (countdown <= 0) return;
 
     const timer = setInterval(() => {
-      const remaining = calculateCountdown();
-      setCountdown(remaining);
-      if (remaining <= 0) {
-        setError(prev => prev.includes('Please wait') ? '' : prev);
-        clearInterval(timer);
-      }
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [expiresAt]);
+  }, [countdown]);
 
   const handleSendCode = async (e?: FormEvent) => {
     if (e) e.preventDefault();
@@ -2748,28 +2736,18 @@ function Login({ onLogin }: { onLogin: () => void }) {
       }
 
       if (!response.ok || !data.success) {
-        // Step 5: If locked, recover the active session and countdown details dynamically
-        if (data.expiresAt && data.sessionId) {
-          const expTime = new Date(data.expiresAt).getTime();
-          const remainingSec = Math.max(0, Math.ceil((expTime - Date.now()) / 1000));
-
-          setSessionId(data.sessionId);
-          setExpiresAt(data.expiresAt);
+        if (response.status === 429) {
+          setCountdown(30);
           setStep('verify');
-          
-          if (remainingSec > 1) {
-            setError(data.error || `A verification code is already active. Please wait ${remainingSec}s.`);
-          } else {
-            setError('');
-          }
+          setError(data.error || 'Please wait a moment before requesting another code.');
           return;
         }
         throw new Error(data.error || 'Failed to send verification code.');
       }
 
-      setSuccessMsg(data.message || 'Verification code sent successfully!');
+      setSuccessMsg(data.message || 'Verification code sent! Valid for 10 minutes.');
       if (data.sessionId) setSessionId(data.sessionId);
-      if (data.expiresAt) setExpiresAt(data.expiresAt);
+      setCountdown(30); // 30-second cooldown before resend
       setStep('verify');
     } catch (err: any) {
       setError(err.message || 'Request failed. Please double check your email/phone.');
@@ -2906,7 +2884,6 @@ function Login({ onLogin }: { onLogin: () => void }) {
                   setSuccessMsg('');
                   setCode('');
                   setSessionId('');
-                  setExpiresAt(null);
                 }}
               >
                 Change
